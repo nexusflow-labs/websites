@@ -532,7 +532,7 @@ interface ListActivityLogsQuery {
   entityType?: 'TASK' | 'PROJECT' | 'WORKSPACE' | 'MEMBER' | 'COMMENT' | 'LABEL'
   entityId?: string
   userId?: string
-  action?: 'CREATE' | 'UPDATE' | 'DELETE'
+  action?: 'CREATE' | 'UPDATE' | 'DELETE' | 'ASSIGN' | 'COMMENT' | 'STATUS_CHANGE'
   fromDate?: string
   toDate?: string
 }
@@ -543,10 +543,88 @@ interface ActivityLogResponse {
   action: 'CREATE' | 'UPDATE' | 'DELETE'
   entityType: string
   entityId: string
-  userId: string
+  user: {
+    id: string;
+    name: string;
+    avatar: string;
+  }
   metadata?: Record<string, any>
   createdAt: string
 }
+
+export type TaskCreateMetadata = {
+  title: string
+  projectId: string
+  parentId?: string | null
+}
+
+export type TaskUpdateMetadata =
+  | {
+      changes: {
+        title?: { old: string; new: string }
+        description?: { old: string | null; new: string }
+        dueDate?: { old: string | null; new: string }
+        priority?: { old: 'LOW' | 'MEDIUM' | 'HIGH'; new: 'LOW' | 'MEDIUM' | 'HIGH' }
+      }
+    }
+  | {
+      action: 'LABEL_ADDED'
+      labelId: string
+      labelName: string
+    }
+
+export type TaskStatusChangeMetadata = {
+  oldStatus: 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE'
+  newStatus: 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE'
+}
+
+export type TaskAssignMetadata = {
+  assigneeId: string
+}
+
+export type TaskCommentMetadata = {
+  commentId: string
+}
+
+// ================= PROJECT =================
+export type ProjectCreateMetadata = {
+  name: string
+  workspaceId: string
+}
+
+export type ProjectUpdateMetadata = {
+  changes: Record<string, { old: any; new: any }>
+}
+
+// ================= WORKSPACE =================
+export type WorkspaceCreateMetadata = {
+  name: string
+}
+
+export type WorkspaceUpdateMetadata = {
+  oldName: string
+  newName: string
+}
+
+// ================= LABEL =================
+export type LabelCreateMetadata = {
+  name: string
+  color: string
+  workspaceId: string
+}
+
+export type LabelDeleteMetadata = {
+  name: string
+  workspaceId: string
+}
+
+// ================= COMMENT =================
+export type CommentUpdateMetadata = {
+  taskId: string
+  oldContent: string
+  newContent: string
+}
+
 type GetActivityLogsResponse = PaginatedResponse<ActivityLogResponse>
 ```
 

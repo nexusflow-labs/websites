@@ -51,10 +51,95 @@ const stats = computed(() => [
   },
 ]);
 
-function getActivityLabel(log: ActivityLog): string {
+function getActivityDescription(log: ActivityLog): string {
+  const meta = log.metadata as Record<string, unknown> | undefined;
+  const statusLabel = (s: string) =>
+    s.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+  // Task-specific actions
+  if (log.action === 'STATUS_CHANGE') {
+    return `changed task status from ${statusLabel(meta?.oldStatus as string)} to ${statusLabel(meta?.newStatus as string)}`;
+  }
+  if (log.action === 'ASSIGN') return 'assigned a task to a member';
+  if (log.action === 'COMMENT') return 'commented on a task';
+
+  if (log.entityType === 'TASK') {
+    if (log.action === 'CREATE') {
+      const title = meta?.title as string;
+      return title ? `created task "${title}"` : 'created a task';
+    }
+    if (log.action === 'UPDATE') {
+      if (meta?.action === 'LABEL_ADDED') {
+        const name = meta.labelName as string;
+        return name ? `added label "${name}" to a task` : 'added a label to a task';
+      }
+      if (meta?.changes) {
+        const fields = Object.keys(meta.changes as object);
+        if (fields.includes('title')) {
+          const t = (meta.changes as Record<string, { new: string }>).title;
+          return `renamed task to "${t.new}"`;
+        }
+        if (fields.includes('priority')) {
+          const p = (meta.changes as Record<string, { old: string; new: string }>).priority;
+          return `changed task priority from ${p.old} to ${p.new}`;
+        }
+        if (fields.includes('dueDate')) return 'updated task due date';
+        if (fields.includes('description')) return 'updated task description';
+        return `updated task (${fields.join(', ')})`;
+      }
+      return 'updated a task';
+    }
+    if (log.action === 'DELETE') return 'deleted a task';
+  }
+
+  if (log.entityType === 'COMMENT') {
+    if (log.action === 'UPDATE') return 'edited a comment';
+    if (log.action === 'DELETE') return 'deleted a comment';
+  }
+
+  if (log.entityType === 'PROJECT') {
+    if (log.action === 'CREATE') {
+      const name = meta?.name as string;
+      return name ? `created project "${name}"` : 'created a project';
+    }
+    if (log.action === 'UPDATE') {
+      if (meta?.changes) {
+        const fields = Object.keys(meta.changes as object);
+        return `updated project (${fields.join(', ')})`;
+      }
+      return 'updated a project';
+    }
+    if (log.action === 'DELETE') return 'deleted a project';
+  }
+
+  if (log.entityType === 'WORKSPACE') {
+    if (log.action === 'CREATE') {
+      const name = meta?.name as string;
+      return name ? `created workspace "${name}"` : 'created the workspace';
+    }
+    if (log.action === 'UPDATE' && meta?.oldName) {
+      return `renamed workspace from "${meta.oldName}" to "${meta.newName}"`;
+    }
+  }
+
+  if (log.entityType === 'LABEL') {
+    if (log.action === 'CREATE') {
+      const name = meta?.name as string;
+      return name ? `created label "${name}"` : 'created a label';
+    }
+    if (log.action === 'DELETE') {
+      const name = meta?.name as string;
+      return name ? `deleted label "${name}"` : 'deleted a label';
+    }
+  }
+
+  if (log.entityType === 'MEMBER') {
+    if (log.action === 'CREATE') return 'joined the workspace';
+    if (log.action === 'DELETE') return 'left the workspace';
+  }
+
   const action = log.action === 'CREATE' ? 'created' : log.action === 'UPDATE' ? 'updated' : 'deleted';
-  const entity = log.entityType.toLowerCase();
-  return `${action} a ${entity}`;
+  return `${action} a ${log.entityType.toLowerCase()}`;
 }
 
 function getActivityIcon(log: ActivityLog): string {
@@ -72,6 +157,9 @@ function getActivityIconClass(log: ActivityLog): string {
     case 'CREATE': return 'bg-success-100 dark:bg-success-900/30 text-success-600 dark:text-success-400';
     case 'UPDATE': return 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400';
     case 'DELETE': return 'bg-danger-100 dark:bg-danger-900/30 text-danger-600 dark:text-danger-400';
+    case 'STATUS_CHANGE': return 'bg-warning-100 dark:bg-warning-900/30 text-warning-600 dark:text-warning-400';
+    case 'ASSIGN': return 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400';
+    case 'COMMENT': return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
     default: return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
   }
 }
@@ -96,7 +184,7 @@ async function loadData() {
 
   isLoadingActivity.value = true;
   try {
-    const response = await activityApi.getForWorkspace(workspaceId.value, { pageSize: 15 });
+    const response = await activityApi.getForWorkspace(workspaceId.value, { pageSize: 5 });
     activityLogs.value = response.items;
   } catch {
     // activity is non-critical
@@ -251,8 +339,14 @@ onMounted(loadData);
 
       <!-- Recent Activity -->
       <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-        <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
           <h3 class="font-semibold text-gray-900 dark:text-white">Recent Activity</h3>
+          <button
+            class="text-sm text-primary-600 dark:text-primary-400 hover:underline"
+            @click="$router.push({ name: 'workspaceActivity', params: { workspaceId } })"
+          >
+            View all
+          </button>
         </div>
 
         <div v-if="isLoadingActivity" class="flex justify-center py-12">
@@ -289,7 +383,7 @@ onMounted(loadData);
             <div class="flex-1 min-w-0">
               <p class="text-sm text-gray-700 dark:text-gray-300">
                 <span class="font-medium text-gray-900 dark:text-white">{{ log.user.name }}</span>
-                {{ ' ' + getActivityLabel(log) }}
+                {{ ' ' + getActivityDescription(log) }}
               </p>
               <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                 {{ formatTime(log.createdAt) }}

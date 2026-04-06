@@ -61,7 +61,7 @@ export interface UnreadCountResponse {
 }
 
 // Activity log types
-export type ActivityAction = 'CREATE' | 'UPDATE' | 'DELETE';
+export type ActivityAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'ASSIGN' | 'COMMENT' | 'STATUS_CHANGE';
 
 export interface ActivityLog {
   id: string;

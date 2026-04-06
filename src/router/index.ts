@@ -96,6 +96,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/workspace/LabelsPage.vue'),
         meta: { title: 'Labels' },
       },
+      {
+        path: 'activity',
+        name: 'workspaceActivity',
+        component: () => import('@/pages/workspace/ActivityLogsPage.vue'),
+        meta: { title: 'Activity Logs' },
+      },
     ],
   },
 
