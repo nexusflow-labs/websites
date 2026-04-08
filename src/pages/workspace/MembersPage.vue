@@ -79,7 +79,7 @@ async function handleRoleChange() {
   try {
     await workspaceStore.updateMemberRole(
       workspaceId.value,
-      selectedMember.value.id,
+      selectedMember.value.userId,
       selectedNewRole.value
     );
     toast.success('Member role updated');

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useProjectRoom, useSocketEvent } from '@/composables/useWebSocket';
 import { useProjectsStore } from '@/stores/projects.store';
 import { useWorkspaceStore } from '@/stores/workspace.store';
 import { useTasksStore } from '@/stores/tasks.store';
 import { useLabelsStore } from '@/stores/labels.store';
+import { useAuthStore } from '@/stores/auth.store';
 import { useToast } from '@/composables/useToast';
 import { formatDate } from '@/utils';
 import WorkspaceLayout from '@/components/layout/WorkspaceLayout.vue';
@@ -23,10 +25,47 @@ const projectsStore = useProjectsStore();
 const workspaceStore = useWorkspaceStore();
 const tasksStore = useTasksStore();
 const labelsStore = useLabelsStore();
+const authStore = useAuthStore();
 const toast = useToast();
 
 const workspaceId = computed(() => route.params.workspaceId as string);
 const projectId = computed(() => route.params.projectId as string);
+
+useProjectRoom(() => projectId.value);
+
+useSocketEvent('task:created', ({ task }) => {
+  tasksStore.addTaskFromRealtime(task);
+});
+
+useSocketEvent('task:updated', ({ task, updatedBy }) => {
+  console.log('Received task update from socket', task, 'updatedBy:', updatedBy);
+  tasksStore.updateTaskFromRealtime(task);
+
+  if (updatedBy !== authStore.user?.id) {
+    toast.info(`Task "${task.title}" was updated`);
+  }
+});
+
+useSocketEvent('task:deleted', ({ taskId }) => {
+  if (selectedTaskId.value === taskId) {
+    showTaskDrawer.value = false;
+    selectedTaskId.value = null;
+  }
+
+  tasksStore.removeTaskFromRealtime(taskId);
+});
+
+useSocketEvent('task:assigned', ({ taskId, assigneeId }) => {
+  if (selectedTaskId.value === taskId) {
+    tasksStore.fetchTask(projectId.value, taskId).catch(() => { });
+  }
+
+  tasksStore.updateTaskAssigned(taskId, assigneeId);
+
+  if (assigneeId === authStore.user?.id) {
+    toast.success('You have been assigned a task');
+  }
+});
 
 // View state
 const viewMode = ref<'board' | 'list'>('board');
@@ -228,10 +267,11 @@ async function handleDrop(event: DragEvent, status: TaskStatus) {
   try {
     await tasksStore.updateTask(projectId.value, task.id, { status });
     toast.success(`Task moved to ${statusColumns.find((c) => c.status === status)?.label}`);
-  } catch (error) {
+  } catch (error:any) {
+    console.log(error);
     // Revert on error
     tasksStore.revertTaskStatus(task.id, oldStatus);
-    toast.error('Failed to update task status');
+    toast.error(error);
   } finally {
     draggedTask.value = null;
   }
@@ -653,11 +693,11 @@ watch(projectId, async () => {
                   class="mt-2 flex items-center"
                 >
                   <NxAvatar
-                    :name="workspaceStore.members.find(m => m.userId === task.assigneeId)?.user.fullName"
+                    :name="workspaceStore.memberByUserId[task.assigneeId]?.user.fullName"
                     size="xs"
                   />
                   <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">
-                    {{ workspaceStore.members.find(m => m.userId === task.assigneeId)?.user.fullName }}
+                    {{ workspaceStore.memberByUserId[task.assigneeId]?.user.fullName }}
                   </span>
                 </div>
               </div>
@@ -682,19 +722,29 @@ watch(projectId, async () => {
         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead class="bg-gray-50 dark:bg-gray-900/50">
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th
+                class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+              >
                 Task
               </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th
+                class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+              >
                 Status
               </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th
+                class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+              >
                 Priority
               </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th
+                class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+              >
                 Assignee
               </th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <th
+                class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+              >
                 Due Date
               </th>
             </tr>
@@ -744,11 +794,11 @@ watch(projectId, async () => {
                   class="flex items-center"
                 >
                   <NxAvatar
-                    :name="workspaceStore.members.find(m => m.userId === task.assigneeId)?.user.fullName"
+                    :name="workspaceStore.memberByUserId[task.assigneeId]?.user.fullName"
                     size="xs"
                   />
                   <span class="ml-2 text-sm text-gray-900 dark:text-white">
-                    {{ workspaceStore.members.find(m => m.userId === task.assigneeId)?.user.fullName }}
+                    {{ workspaceStore.memberByUserId[task.assigneeId]?.user.fullName }}
                   </span>
                 </div>
                 <span
@@ -809,7 +859,7 @@ watch(projectId, async () => {
       :project="projectsStore.currentProject"
       @close="showSettingsModal = false"
       @updated="loadProject"
-      @deleted="() => {}"
+      @deleted="() => { }"
     />
 
     <!-- Create Task Modal -->

@@ -74,7 +74,7 @@ export const useProjectsStore = defineStore('projects', () => {
       pagination.value = response.meta;
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -91,7 +91,7 @@ export const useProjectsStore = defineStore('projects', () => {
       currentProject.value = await projectsApi.getById(workspaceId, projectId);
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -111,7 +111,7 @@ export const useProjectsStore = defineStore('projects', () => {
       return project;
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -142,7 +142,7 @@ export const useProjectsStore = defineStore('projects', () => {
       return updated;
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -165,7 +165,7 @@ export const useProjectsStore = defineStore('projects', () => {
       }
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -182,6 +182,37 @@ export const useProjectsStore = defineStore('projects', () => {
   function setPageSize(pageSize: number): void {
     pagination.value.pageSize = pageSize;
     pagination.value.page = 1;
+  }
+
+  // Real-time mutations
+  function addProjectFromRealtime(project: Project): void {
+    if (projects.value.some((item) => item.id === project.id)) return;
+    projects.value.unshift(project);
+    pagination.value.totalItems++;
+  }
+
+  function updateProjectFromRealtime(project: Project): void {
+    const index = projects.value.findIndex((item) => item.id === project.id);
+    if (index !== -1) {
+      projects.value[index] = { ...projects.value[index], ...project };
+    }
+
+    if (currentProject.value?.id === project.id) {
+      currentProject.value = { ...currentProject.value, ...project };
+    }
+  }
+
+  function removeProjectFromRealtime(projectId: string): void {
+    const exists = projects.value.some((project) => project.id === projectId);
+    projects.value = projects.value.filter((project) => project.id !== projectId);
+
+    if (exists) {
+      pagination.value.totalItems = Math.max(0, pagination.value.totalItems - 1);
+    }
+
+    if (currentProject.value?.id === projectId) {
+      currentProject.value = null;
+    }
   }
 
   function clearError(): void {
@@ -231,6 +262,9 @@ export const useProjectsStore = defineStore('projects', () => {
     setFilters,
     setPage,
     setPageSize,
+    addProjectFromRealtime,
+    updateProjectFromRealtime,
+    removeProjectFromRealtime,
     clearError,
     reset,
   };

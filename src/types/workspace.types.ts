@@ -38,7 +38,6 @@ export interface AddMemberRequest {
 }
 
 export interface UpdateRoleRequest {
-  operationId: string;
   newRole: MemberRole;
 }
 

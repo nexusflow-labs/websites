@@ -71,10 +71,10 @@ export const workspacesApi = {
    */
   async updateMemberRole(
     workspaceId: string,
-    memberId: string,
+    memberUserId: string,
     data: UpdateRoleRequest
   ): Promise<void> {
-    await http.patch(`/workspaces/${workspaceId}/members/${memberId}/role`, data);
+    await http.patch(`/workspaces/${workspaceId}/members/${memberUserId}/role`, data);
   },
 
   /**

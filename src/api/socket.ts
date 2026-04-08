@@ -1,6 +1,14 @@
 import { io, Socket } from 'socket.io-client';
 import { tokenManager } from './http';
-import type { Task, CommentWithUser, Project, MemberWithUser, Invitation, Member } from '@/types';
+import type {
+  Task,
+  CommentWithUser,
+  Project,
+  MemberWithUser,
+  Invitation,
+  Member,
+  Notification,
+} from '@/types';
 
 const WS_URL = import.meta.env.VITE_WS_URL;
 
@@ -16,7 +24,11 @@ const stateListeners: Set<(state: ConnectionState) => void> = new Set();
 export interface SocketEvents {
   // Task events
   'task:created': { task: Task };
-  'task:updated': { task: Task; changes: Record<string, unknown>; updatedBy: string };
+  'task:updated': {
+    task: Task;
+    changes: Record<string, unknown>;
+    updatedBy: string;
+  };
   'task:deleted': { taskId: string; deletedBy: string };
   'task:assigned': {
     taskId: string;
@@ -32,7 +44,11 @@ export interface SocketEvents {
 
   // Project events
   'project:created': { project: Project };
-  'project:updated': { project: Project; changes: Record<string, unknown>; updatedBy: string };
+  'project:updated': {
+    project: Project;
+    changes: Record<string, unknown>;
+    updatedBy: string;
+  };
   'project:deleted': { projectId: string; deletedBy: string };
 
   // Member events
@@ -50,6 +66,11 @@ export interface SocketEvents {
   'invitation:received': { invitation: Invitation };
   'invitation:accepted': { invitation: Invitation; member: Member };
   'invitation:rejected': { invitation: Invitation };
+
+  // Notification events (user room — server auto-joins on connect)
+  'notification:received': {
+    notification: Omit<Notification, 'userId' | 'readAt'>;
+  };
 
   // Typing events
   'user:typing': { taskId: string; userId: string };

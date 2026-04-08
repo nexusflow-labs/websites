@@ -547,6 +547,7 @@ watch(
                   <TaskComments
                     v-if="activeTab === 'comments'"
                     :task-id="taskId"
+                    :project-id="projectId"
                   />
 
                   <!-- Subtasks Tab -->

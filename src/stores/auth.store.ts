@@ -62,7 +62,7 @@ export const useAuthStore = defineStore('auth', () => {
       connect();
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -76,7 +76,7 @@ export const useAuthStore = defineStore('auth', () => {
       await authApi.register(data);
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -125,7 +125,7 @@ export const useAuthStore = defineStore('auth', () => {
       return response.message;
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -140,7 +140,7 @@ export const useAuthStore = defineStore('auth', () => {
       return response.message;
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }

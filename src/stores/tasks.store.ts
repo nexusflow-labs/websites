@@ -118,7 +118,7 @@ export const useTasksStore = defineStore('tasks', () => {
       pagination.value = response.meta;
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -142,7 +142,7 @@ export const useTasksStore = defineStore('tasks', () => {
       currentTaskLabels.value = labels;
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoadingTask.value = false;
     }
@@ -153,7 +153,7 @@ export const useTasksStore = defineStore('tasks', () => {
       subtasks.value = await tasksApi.getSubtasks(projectId, taskId);
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     }
   }
 
@@ -179,7 +179,7 @@ export const useTasksStore = defineStore('tasks', () => {
       return task;
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -218,7 +218,7 @@ export const useTasksStore = defineStore('tasks', () => {
       return updated;
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     }
   }
 
@@ -249,7 +249,7 @@ export const useTasksStore = defineStore('tasks', () => {
       return updated;
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     }
   }
 
@@ -271,7 +271,7 @@ export const useTasksStore = defineStore('tasks', () => {
       }
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     }
   }
 
@@ -286,7 +286,7 @@ export const useTasksStore = defineStore('tasks', () => {
       }
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     }
   }
 
@@ -300,7 +300,7 @@ export const useTasksStore = defineStore('tasks', () => {
       }
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     }
   }
 
@@ -309,6 +309,16 @@ export const useTasksStore = defineStore('tasks', () => {
     const index = tasks.value.findIndex((t) => t.id === taskId);
     if (index !== -1) {
       tasks.value[index] = { ...tasks.value[index], status };
+    }
+  }
+
+  function updateTaskAssigned(
+    taskId: string,
+    assigneeId: string | null,
+  ): void {
+    const index = tasks.value.findIndex((t) => t.id === taskId);
+    if (index !== -1) {
+      tasks.value[index] = { ...tasks.value[index], assigneeId: assigneeId ?? undefined };
     }
   }
 
@@ -346,6 +356,47 @@ export const useTasksStore = defineStore('tasks', () => {
     } else {
       currentTaskLabels.value = [];
       subtasks.value = [];
+    }
+  }
+
+  // Real-time mutations
+  function addTaskFromRealtime(task: Task): void {
+    if (tasks.value.some((item) => item.id === task.id)) return;
+
+    if (!task.parentId) {
+      tasks.value.unshift(task);
+      pagination.value.totalItems++;
+    }
+  }
+
+  function updateTaskFromRealtime(task: Task): void {
+    const taskIndex = tasks.value.findIndex((item) => item.id === task.id);
+    if (taskIndex !== -1) {
+      tasks.value[taskIndex] = { ...tasks.value[taskIndex], ...task };
+    }
+
+    const subtaskIndex = subtasks.value.findIndex((item) => item.id === task.id);
+    if (subtaskIndex !== -1) {
+      subtasks.value[subtaskIndex] = { ...subtasks.value[subtaskIndex], ...task };
+    }
+
+    if (currentTask.value?.id === task.id) {
+      currentTask.value = { ...currentTask.value, ...task };
+    }
+  }
+
+  function removeTaskFromRealtime(taskId: string): void {
+    const rootTaskExists = tasks.value.some((task) => task.id === taskId);
+
+    tasks.value = tasks.value.filter((task) => task.id !== taskId);
+    subtasks.value = subtasks.value.filter((task) => task.id !== taskId);
+
+    if (rootTaskExists) {
+      pagination.value.totalItems = Math.max(0, pagination.value.totalItems - 1);
+    }
+
+    if (currentTask.value?.id === taskId) {
+      currentTask.value = null;
     }
   }
 
@@ -408,12 +459,16 @@ export const useTasksStore = defineStore('tasks', () => {
     addLabelToTask,
     removeLabelFromTask,
     updateTaskStatusOptimistic,
+    updateTaskAssigned,
     revertTaskStatus,
     setFilters,
     clearFilters,
     setPage,
     setPageSize,
     setCurrentTask,
+    addTaskFromRealtime,
+    updateTaskFromRealtime,
+    removeTaskFromRealtime,
     clearError,
     reset,
   };

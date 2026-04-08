@@ -127,6 +127,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/invitations/accept',
     name: 'acceptInvitation',
+    beforeEnter: authGuard,
     component: () => import('@/pages/InvitationPage.vue'),
     meta: { title: 'Accept Invitation' },
   },

@@ -34,7 +34,7 @@ export const useLabelsStore = defineStore('labels', () => {
       labels.value = await labelsApi.getAll(workspaceId);
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -53,7 +53,7 @@ export const useLabelsStore = defineStore('labels', () => {
       return label;
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -75,7 +75,7 @@ export const useLabelsStore = defineStore('labels', () => {
       return updated;
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     }
   }
 
@@ -87,7 +87,7 @@ export const useLabelsStore = defineStore('labels', () => {
       labels.value = labels.value.filter((l) => l.id !== labelId);
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     }
   }
 

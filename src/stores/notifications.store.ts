@@ -38,7 +38,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
       hasNextPage.value = response.meta.hasNextPage;
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -84,7 +84,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
       }
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     }
   }
 
@@ -95,7 +95,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
       unreadCount.value = 0;
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     }
   }
 

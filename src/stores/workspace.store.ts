@@ -18,6 +18,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const workspaces = ref<Workspace[]>([]);
   const currentWorkspace = ref<Workspace | null>(null);
   const members = ref<MemberWithUser[]>([]);
+  const memberByUserId = ref<Record<string, MemberWithUser>>({});
   const invitations = ref<Invitation[]>([]);
   const userRole = ref<MemberRole | null>(null);
   const isLoading = ref(false);
@@ -38,6 +39,21 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return members.value.find((m) => m.role === userRole.value);
   });
 
+  function rebuildMemberByUserId(nextMembers: MemberWithUser[]): void {
+    memberByUserId.value = Object.fromEntries(nextMembers.map((member) => [member.userId, member]));
+  }
+
+  function setMember(member: MemberWithUser): void {
+    memberByUserId.value[member.userId] = member;
+  }
+
+  function removeMemberByUserId(userId: string): void {
+    if (!memberByUserId.value[userId]) return;
+
+    const { [userId]: _removed, ...rest } = memberByUserId.value;
+    memberByUserId.value = rest;
+  }
+
   // Actions - Workspaces
   async function fetchWorkspaces(): Promise<void> {
     isLoading.value = true;
@@ -47,7 +63,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       workspaces.value = await workspacesApi.getAll();
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -61,7 +77,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       currentWorkspace.value = await workspacesApi.getById(id);
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -77,7 +93,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       return workspace;
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -101,7 +117,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       return updated;
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -119,7 +135,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       }
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -132,9 +148,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
     try {
       members.value = await workspacesApi.getMembers(workspaceId);
+      rebuildMemberByUserId(members.value);
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -142,25 +159,25 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   async function updateMemberRole(
     workspaceId: string,
-    memberId: string,
+    memberUserId: string,
     newRole: MemberRole
   ): Promise<void> {
     isLoading.value = true;
     error.value = null;
 
     try {
-      await workspacesApi.updateMemberRole(workspaceId, memberId, {
-        operationId: crypto.randomUUID(),
+      await workspacesApi.updateMemberRole(workspaceId, memberUserId, {
         newRole,
       });
       // Update local state
-      const member = members.value.find((m) => m.id === memberId);
+      const member = members.value.find((m) => m.id === memberUserId);
       if (member) {
         member.role = newRole;
+        setMember(member);
       }
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -172,10 +189,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
     try {
       await workspacesApi.removeMember(workspaceId, memberId);
+      const member = members.value.find((m) => m.id === memberId);
       members.value = members.value.filter((m) => m.id !== memberId);
+      if (member) {
+        removeMemberByUserId(member.userId);
+      }
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -190,7 +211,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       invitations.value = await invitationsApi.getAll(workspaceId);
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -209,7 +230,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       return invitation;
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -224,7 +245,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       invitations.value = invitations.value.filter((i) => i.id !== invitationId);
     } catch (err) {
       error.value = getErrorMessage(err);
-      throw err;
+      throw error.value;
     } finally {
       isLoading.value = false;
     }
@@ -246,6 +267,29 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     userRole.value = role;
   }
 
+  // Real-time mutations
+  function addMemberFromRealtime(member: MemberWithUser): void {
+    if (memberByUserId.value[member.userId]) return;
+    members.value.push(member);
+    setMember(member);
+  }
+
+  function removeMemberFromRealtime(memberId: string): void {
+    const member = members.value.find((item) => item.id === memberId);
+    members.value = members.value.filter((member) => member.id !== memberId);
+    if (member) {
+      removeMemberByUserId(member.userId);
+    }
+  }
+
+  function updateMemberRoleFromRealtime(memberId: string, newRole: MemberRole): void {
+    const member = members.value.find((item) => item.id === memberId);
+    if (member) {
+      member.role = newRole;
+      setMember(member);
+    }
+  }
+
   function clearError(): void {
     error.value = null;
   }
@@ -254,6 +298,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     workspaces.value = [];
     currentWorkspace.value = null;
     members.value = [];
+    memberByUserId.value = {};
     invitations.value = [];
     userRole.value = null;
     isLoading.value = false;
@@ -265,6 +310,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     workspaces,
     currentWorkspace,
     members,
+    memberByUserId,
     invitations,
     userRole,
     isLoading,
@@ -299,6 +345,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     // Helpers
     setCurrentWorkspace,
     setUserRole,
+    addMemberFromRealtime,
+    removeMemberFromRealtime,
+    updateMemberRoleFromRealtime,
     clearError,
     reset,
   };

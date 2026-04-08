@@ -1,7 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import { commentsApi } from '@/api/comments.api';
 import { useAuthStore } from '@/stores/auth.store';
+import { useWorkspaceStore } from '@/stores/workspace.store';
+import {
+  useTaskRoom,
+  useSocketEvent,
+  useTypingIndicator,
+} from '@/composables/useWebSocket';
 import { useToast } from '@/composables/useToast';
 import { formatRelativeTime } from '@/utils';
 import NxButton from '@/components/ui/NxButton.vue';
@@ -12,11 +18,13 @@ import type { CommentWithUser, PaginationMeta } from '@/types';
 
 interface Props {
   taskId: string;
+  projectId: string;
 }
 
 const props = defineProps<Props>();
 
 const authStore = useAuthStore();
+const workspaceStore = useWorkspaceStore();
 const toast = useToast();
 
 const comments = ref<CommentWithUser[]>([]);
@@ -35,8 +43,74 @@ const isSavingEdit = ref(false);
 
 // Delete state
 const deletingCommentId = ref<string | null>(null);
+const commentsContainer = ref<HTMLElement | null>(null);
 
 const currentUserId = computed(() => authStore.user?.id);
+
+useTaskRoom(
+  () => props.taskId,
+  () => props.projectId
+);
+
+useSocketEvent('comment:created', ({ comment }) => {
+  if (comment.taskId !== props.taskId || comment.author.id === currentUserId.value) {
+    return;
+  }
+
+  comments.value.push(comment);
+  pagination.value = pagination.value
+    ? { ...pagination.value, totalItems: pagination.value.totalItems + 1 }
+    : pagination.value;
+  scrollToBottom();
+});
+
+useSocketEvent('comment:updated', ({ comment }) => {
+  if (comment.taskId !== props.taskId) return;
+
+  const index = comments.value.findIndex((item) => item.id === comment.id);
+  if (index !== -1) {
+    comments.value[index] = comment;
+  }
+});
+
+useSocketEvent('comment:deleted', ({ commentId }) => {
+  const exists = comments.value.some((comment) => comment.id === commentId);
+  comments.value = comments.value.filter((comment) => comment.id !== commentId);
+
+  if (exists && pagination.value) {
+    pagination.value = {
+      ...pagination.value,
+      totalItems: Math.max(0, pagination.value.totalItems - 1),
+    };
+  }
+});
+
+const { typingUsers, startTyping, stopTyping } = useTypingIndicator(() => props.taskId);
+
+const typingUserNames = computed(() =>
+  [...typingUsers.value]
+    .filter((id) => id !== currentUserId.value)
+    .map((id) => {
+      const member = workspaceStore.members.find((item) => item.user.id === id);
+      return member?.user.fullName ?? 'Someone';
+    })
+);
+
+const typingText = computed(() => {
+  if (typingUserNames.value.length === 0) return null;
+  if (typingUserNames.value.length === 1) return `${typingUserNames.value[0]} is typing...`;
+  if (typingUserNames.value.length === 2) {
+    return `${typingUserNames.value[0]} and ${typingUserNames.value[1]} are typing...`;
+  }
+  return 'Several people are typing...';
+});
+
+async function scrollToBottom(): Promise<void> {
+  await nextTick();
+  if (commentsContainer.value) {
+    commentsContainer.value.scrollTop = commentsContainer.value.scrollHeight;
+  }
+}
 
 async function loadComments(page = 1) {
   if (page === 1) {
@@ -65,6 +139,7 @@ async function submitComment() {
   if (!newComment.value.trim()) return;
 
   isSubmitting.value = true;
+  stopTyping();
   try {
     const comment = await commentsApi.create(props.taskId, {
       content: newComment.value.trim(),
@@ -80,9 +155,13 @@ async function submitComment() {
         avatar: authStore.user?.avatar,
       },
     };
-    comments.value.unshift(commentWithUser);
+    comments.value.push(commentWithUser);
+    if (pagination.value) {
+      pagination.value = { ...pagination.value, totalItems: pagination.value.totalItems + 1 };
+    }
 
     newComment.value = '';
+    await scrollToBottom();
     toast.success('Comment added');
   } catch (error) {
     toast.error('Failed to add comment');
@@ -148,6 +227,17 @@ function loadMore() {
 onMounted(() => {
   loadComments();
 });
+
+watch(
+  () => props.taskId,
+  () => {
+    editingCommentId.value = null;
+    editedContent.value = '';
+    newComment.value = '';
+    stopTyping();
+    loadComments();
+  }
+);
 </script>
 
 <template>
@@ -166,7 +256,15 @@ onMounted(() => {
             placeholder="Write a comment..."
             :rows="3"
             :disabled="isSubmitting"
+            @input="startTyping"
+            @blur="stopTyping"
           />
+          <p
+            v-if="typingText"
+            class="mt-1 h-4 text-xs italic text-gray-500 dark:text-gray-400"
+          >
+            {{ typingText }}
+          </p>
         </div>
       </div>
       <div class="flex justify-end">
@@ -217,6 +315,7 @@ onMounted(() => {
       <!-- Comments -->
       <div
         v-else
+        ref="commentsContainer"
         class="space-y-4"
       >
         <div

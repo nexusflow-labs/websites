@@ -914,6 +914,11 @@ const socket = io('http://localhost:3000', {
 | `user:typing` | `{ taskId, userId }` |
 | `user:stop_typing` | `{ taskId, userId }` |
 
+**Notification Events** (task user):
+| Event | Payload |
+|-------|---------|
+| `notification:received` | `{ Notification }` |
+
 ---
 
 ## Shared Types

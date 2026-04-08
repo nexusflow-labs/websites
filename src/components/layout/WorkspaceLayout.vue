@@ -1,20 +1,84 @@
 <script setup lang="ts">
 import { computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
+import { useWebSocket, useWorkspaceRoom, useSocketEvent } from '@/composables/useWebSocket';
 import { useWorkspaceStore } from '@/stores/workspace.store';
+import { useProjectsStore } from '@/stores/projects.store';
 import { useAuthStore } from '@/stores/auth.store';
 import { useNotificationsStore } from '@/stores/notifications.store';
+import { useToast } from '@/composables/useToast';
 import NxAvatar from '@/components/ui/NxAvatar.vue';
 import NxDropdown from '@/components/ui/NxDropdown.vue';
 import NxSpinner from '@/components/ui/NxSpinner.vue';
+import type { MemberRole, MemberWithUser, Notification } from '@/types';
 
 const route = useRoute();
 const router = useRouter();
 const workspaceStore = useWorkspaceStore();
+const projectsStore = useProjectsStore();
 const authStore = useAuthStore();
-
 const notificationsStore = useNotificationsStore();
+const toast = useToast();
 const workspaceId = computed(() => route.params.workspaceId as string);
+
+useWebSocket();
+useWorkspaceRoom(() => workspaceId.value);
+
+useSocketEvent('project:created', ({ project }) => {
+  projectsStore.addProjectFromRealtime(project);
+});
+
+useSocketEvent('project:updated', ({ project }) => {
+  projectsStore.updateProjectFromRealtime(project);
+});
+
+useSocketEvent('project:deleted', ({ projectId }) => {
+  projectsStore.removeProjectFromRealtime(projectId);
+
+  if (route.params.projectId === projectId) {
+    router.push({ name: 'workspaceProjects', params: { workspaceId: workspaceId.value } });
+    toast.warning('This project has been deleted');
+  }
+});
+
+useSocketEvent('member:added', ({ member }) => {
+  workspaceStore.addMemberFromRealtime(member);
+});
+
+useSocketEvent('member:removed', ({ memberId, userId }) => {
+  workspaceStore.removeMemberFromRealtime(memberId);
+
+  if (userId === authStore.user?.id) {
+    router.push({ name: 'home' });
+    toast.error('You have been removed from this workspace');
+  }
+});
+
+useSocketEvent('member:role_changed', ({ memberId, userId, newRole }) => {
+  console.log('Received role change event for memberId:', memberId, 'userId:', userId, 'newRole:', newRole);
+  workspaceStore.updateMemberRoleFromRealtime(memberId, newRole as MemberRole);
+
+  if (userId === authStore.user?.id) {
+    workspaceStore.userRole = newRole as MemberRole;
+    toast.info(`Your role has been changed to ${newRole}`);
+  }
+});
+
+useSocketEvent('invitation:accepted', ({ member }) => {
+  workspaceStore.addMemberFromRealtime(member as MemberWithUser);
+});
+
+useSocketEvent('notification:received', ({ notification }) => {
+  const fullNotification: Notification = {
+    ...notification,
+    userId: authStore.user?.id ?? '',
+    isRead: false,
+    readAt: undefined,
+  };
+
+  notificationsStore.addNotification(fullNotification);
+  toast.info(notification.message ?? notification.title, notification.title);
+});
 
 const navigation = [
   {
