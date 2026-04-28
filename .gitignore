@@ -34,14 +34,16 @@ yarn-error.log
 testem.log
 /typings
 
+# Environment variables
+.env
+
 # System Files
 .DS_Store
 Thumbs.db
 
 .nx/cache
 .nx/workspace-data
-.claude/worktrees
-.claude/settings.local.json
+.claude/
 CLAUDE.md
 
 .nx/polygraph
